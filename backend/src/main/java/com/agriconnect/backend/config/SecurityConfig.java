@@ -3,9 +3,13 @@ package com.agriconnect.backend.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -25,7 +29,6 @@ public class SecurityConfig {
 
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
                 http
                                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                                 .csrf(csrf -> csrf.disable())
@@ -61,7 +64,7 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/crop-requests", "/api/crop-requests/**")
                                                 .hasAnyRole("FARMER", "DEALER", "ADMIN", "CUSTOMER")
 
-                                                // 🤝 DEALS — /api/deals AND /api/deals/** दोन्ही
+                                                // 🤝 DEALS
                                                 .requestMatchers("/api/deals", "/api/deals/**")
                                                 .hasAnyRole("FARMER", "DEALER", "ADMIN", "CUSTOMER")
 
@@ -89,10 +92,27 @@ public class SecurityConfig {
                 return http.build();
         }
 
+        // ✅ हे नवीन — Spring चा default UserDetailsService disable करतो
+        // त्यामुळे "Using generated security password" warning येणार नाही
+        // आणि 403 fix होईल
+        @Bean
+        public UserDetailsService userDetailsService() {
+                return username -> {
+                        throw new UsernameNotFoundException("JWT authentication used — no UserDetailsService needed");
+                };
+        }
+
+        @Bean
+        public AuthenticationManager authenticationManager(
+                        AuthenticationConfiguration config) throws Exception {
+                return config.getAuthenticationManager();
+        }
+
         @Bean
         public CorsConfigurationSource corsConfigurationSource() {
                 UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
+                // PayU callbacks — credentials नको
                 CorsConfiguration payuConfig = new CorsConfiguration();
                 payuConfig.setAllowedOriginPatterns(List.of("*"));
                 payuConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
@@ -102,8 +122,8 @@ public class SecurityConfig {
                 source.registerCorsConfiguration("/api/payments/failure", payuConfig);
                 source.registerCorsConfiguration("/api/payments/webhook", payuConfig);
 
+                // React app — सगळे ports
                 CorsConfiguration appConfig = new CorsConfiguration();
-                // ✅ 5173, 5174, 5175 तिन्ही allowed
                 appConfig.setAllowedOrigins(List.of(
                                 "http://localhost:5173",
                                 "http://localhost:5174",

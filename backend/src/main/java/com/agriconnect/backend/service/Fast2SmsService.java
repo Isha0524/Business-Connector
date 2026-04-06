@@ -1,65 +1,81 @@
 package com.agriconnect.backend.service;
 
-import com.twilio.Twilio;
-import com.twilio.rest.api.v2010.account.Message;
-import com.twilio.type.PhoneNumber;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
-@Slf4j
 @Service
 public class Fast2SmsService {
 
-    @Value("${twilio.account-sid:}")
-    private String accountSid;
+    private static final Logger logger = LoggerFactory.getLogger(Fast2SmsService.class);
 
-    @Value("${twilio.auth-token:}")
-    private String authToken;
+    @Value("${fast2sms.api.key}")
+    private String apiKey;
 
-    @Value("${twilio.phone-number:}")
-    private String twilioPhone;
-
-    @Value("${twilio.enabled:false}")
+    @Value("${fast2sms.enabled:false}")
     private boolean enabled;
 
-    @PostConstruct
-    public void init() {
-        if (enabled && accountSid != null && !accountSid.isBlank()) {
-            Twilio.init(accountSid, authToken);
-            log.info("Twilio initialized successfully");
-        }
-    }
-
-    public boolean sendOtp(String mobile, String otp) {
-
-        if (!enabled || accountSid == null || accountSid.isBlank()) {
-            log.warn("DEV MODE - SMS not sent | Mobile: {} | OTP: {}", mobile, otp);
-            return true;
+    public boolean sendOtp(String phone, String otp) {
+        if (!enabled) {
+            logger.warn("⚠️ Fast2SMS is disabled. OTP for {} : {}", phone, otp);
+            return false;
         }
 
         try {
-            String mob = mobile.replaceAll("\\D", "");
-            if (mob.length() == 10) mob = "+91" + mob;
-            else if (mob.length() == 12) mob = "+" + mob;
+            // ✅ POST method + authorization HEADER (Node.js server.js प्रमाणे)
+            URL url = new URL("https://www.fast2sms.com/dev/bulkV2");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("authorization", apiKey); // ✅ HEADER मध्ये key
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("cache-control", "no-cache");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setDoOutput(true);
 
-            String messageBody = "Your AgriConnect OTP is " + otp
-                    + ". Valid for 10 minutes. Do not share with anyone.";
+            // ✅ JSON body
+            String message = "Your AgriConnect OTP is " + otp + ". Valid for 5 minutes. Do not share with anyone.";
+            String jsonBody = "{\"route\":\"q\",\"message\":\"" + message
+                    + "\",\"language\":\"english\",\"flash\":0,\"numbers\":\"" + phone + "\"}";
 
-            Message message = Message.creator(
-                    new PhoneNumber(mob),
-                    new PhoneNumber(twilioPhone),
-                    messageBody
-            ).create();
+            logger.info("📱 Fast2SMS sending to: {} | OTP: {}", phone, otp);
 
-            log.info("OTP SMS sent! SID: {} | To: ******{}",
-                    message.getSid(), mob.substring(mob.length() - 4));
-            return true;
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int responseCode = conn.getResponseCode();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    responseCode == 200 ? conn.getInputStream() : conn.getErrorStream()));
+
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null)
+                response.append(line);
+            reader.close();
+
+            String responseBody = response.toString();
+            logger.info("📱 Fast2SMS Response [{}]: {}", responseCode, responseBody);
+
+            boolean success = responseCode == 200 && responseBody.contains("\"return\":true");
+
+            if (success)
+                logger.info("✅ OTP sent successfully to {}", phone);
+            else
+                logger.error("❌ Failed to send OTP to {}. Response: {}", phone, responseBody);
+
+            return success;
 
         } catch (Exception e) {
-            log.error("Twilio SMS error: {}", e.getMessage());
+            logger.error("❌ Fast2SMS exception for phone {}: {}", phone, e.getMessage(), e);
             return false;
         }
     }

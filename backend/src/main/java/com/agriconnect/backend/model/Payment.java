@@ -40,7 +40,7 @@ public class Payment {
     private LocalDateTime completedAt;
 
     public enum PaymentStatus {
-        PENDING, COMPLETED, FAILED, REFUNDED
+        PENDING, COMPLETED, FAILED, REFUNDED, PARTIAL
     }
 
     public enum PaymentMethod {

@@ -1,0 +1,26 @@
+# Node (frontend)
+node_modules/
+
+# Environment
+.env
+
+# Build folders
+dist/
+build/
+
+# Java (backend)
+target/
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.classpath
+*.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
