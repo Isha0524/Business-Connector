@@ -32,7 +32,7 @@ public class ChatService {
                 + (apiKey.isEmpty() ? "NOT FOUND" : apiKey.substring(0, Math.min(10, apiKey.length())) + "..."));
 
         String finalApiUrl = apiUrl.isEmpty() ? "https://api.groq.com/openai/v1/chat/completions" : apiUrl;
-        String finalApiKey = apiKey.isEmpty() ? "YOUR_API_KEY" : apiKey;
+        String finalApiKey = apiKey.isEmpty() ? "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" : apiKey;
 
         this.webClient = WebClient.builder()
                 .baseUrl(finalApiUrl)
